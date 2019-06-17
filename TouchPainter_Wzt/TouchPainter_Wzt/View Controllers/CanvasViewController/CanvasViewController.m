@@ -10,6 +10,11 @@
 #import "Dot.h"
 #import "Stroke.h"
 
+@interface CanvasViewController ()
+@property (nonatomic, assign) BOOL isTouchDrawing;
+
+@end
+
 @implementation CanvasViewController
 
 @synthesize canvasView=canvasView_;
@@ -133,8 +138,9 @@
     CGPoint lastPoint = [[touches anyObject] previousLocationInView:canvasView_];
   
     // add a new stroke to scribble if this is indeed a drag from a finger
-    if (CGPointEqualToPoint(lastPoint, startPoint_))
+    if (CGPointEqualToPoint(lastPoint, startPoint_) && !_isTouchDrawing)
     {
+        _isTouchDrawing = YES;
         id <Mark> newStroke = [[Stroke alloc] init];// autorelease];//tyler
         [newStroke setColor:strokeColor_];
         [newStroke setSize:strokeSize_];
@@ -169,38 +175,41 @@
     // if the touch never moves (stays at the same spot until lifted now)
     // just add a dot to an existing stroke composite
     // otherwise add it to the temp stroke as the last vertex
-    if (CGPointEqualToPoint(lastPoint, thisPoint))
+    if (CGPointEqualToPoint(startPoint_, thisPoint) && _isTouchDrawing) //CGPointEqualToPoint(lastPoint, thisPoint)
     {
+        _isTouchDrawing = NO;
         Dot *singleDot = [[Dot alloc]
                           initWithLocation:thisPoint];//autorelease]; //tyler
         [singleDot setColor:strokeColor_];
         [singleDot setSize:strokeSize_];
-    
+
         //[scribble_ addMark:singleDot shouldAddToPreviousMark:NO];
-    
+
         // retrieve a new NSInvocation for drawing and
         // set new arguments for the draw command
         NSInvocation *drawInvocation = [self drawScribbleInvocation];
         [drawInvocation setArgument:&singleDot atIndex:2];
-    
+
         // retrieve a new NSInvocation for undrawing and set a new argument for the undraw command
         NSInvocation *undrawInvocation = [self undrawScribbleInvocation];
         [undrawInvocation setArgument:&singleDot atIndex:2];
-    
+
         // execute the draw command with the undraw command
         [self executeInvocation:drawInvocation withUndoInvocation:undrawInvocation];
     }
    
     // reset the start point here
     startPoint_ = CGPointZero;
+    _isTouchDrawing = NO;
   
     // if this is the last point of stroke don't bother to draw it as the user won't tell the difference
 }
 
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {
     
-  // reset the start point here
-  startPoint_ = CGPointZero;
+    // reset the start point here
+    startPoint_ = CGPointZero;
+    _isTouchDrawing = NO;
 }
 
 
@@ -263,8 +272,8 @@
     //保留参数 和 返回值
     [invocation retainArguments];
 
-    [[self.undoManager prepareWithInvocationTarget:self]
-     unexecuteInvocation:undoInvocation withRedoInvocation:invocation];
+    //注册操作
+    [[self.undoManager prepareWithInvocationTarget:self] unexecuteInvocation:undoInvocation withRedoInvocation:invocation];
   
     [invocation invoke];
 }
@@ -272,8 +281,7 @@
 - (void) unexecuteInvocation:(NSInvocation *)invocation 
           withRedoInvocation:(NSInvocation *)redoInvocation
 {  
-  [[self.undoManager prepareWithInvocationTarget:self] 
-   executeInvocation:redoInvocation withUndoInvocation:invocation];
+  [[self.undoManager prepareWithInvocationTarget:self] executeInvocation:redoInvocation withUndoInvocation:invocation];
   
   [invocation invoke];
 }
